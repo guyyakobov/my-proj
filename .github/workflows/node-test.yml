@@ -1,0 +1,128 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      node-version:
+        type: string
+        default: "22"
+      package-manager:
+        type: string
+        default: "npm"
+      lint:
+        type: boolean
+        default: true
+      unit:
+        type: boolean
+        default: true
+jobs:
+  lint:
+    if: ${{ inputs.lint }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Get changed files
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            node:
+              - 'services/${{ inputs.service }}/**/*.js'
+              - 'services/${{ inputs.service }}/**/*.jsx'
+              - 'services/${{ inputs.service }}/**/*.ts'
+              - 'services/${{ inputs.service }}/**/*.tsx'
+      - name: Set up Node.js
+        if: steps.changes.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: |
+            services/${{ inputs.service }}/package-lock.json
+            services/${{ inputs.service }}/pnpm-lock.yaml
+            services/${{ inputs.service }}/yarn.lock
+      - name: Install dependencies
+        if: steps.changes.outputs.node == 'true'
+        run: &install-node |
+          set -euo pipefail
+          cd services/${{ inputs.service }}
+          if [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm ci
+          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            corepack enable
+            yarn install --immutable
+          else
+            echo "Unsupported package manager"
+            exit 1
+          fi
+      - name: Run linter
+        if: steps.changes.outputs.node == 'true'
+        run: |
+          set -euo pipefail
+          cd services/${{ inputs.service }}
+          if [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run lint
+          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm lint
+          else
+            yarn lint
+          fi
+
+  unit:
+    if: ${{ inputs.unit }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get changed files
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            node:
+              - 'services/${{ inputs.service }}/**/*.js'
+              - 'services/${{ inputs.service }}/**/*.jsx'
+              - 'services/${{ inputs.service }}/**/*.ts'
+              - 'services/${{ inputs.service }}/**/*.tsx'
+              - 'services/${{ inputs.service }}/package.json'
+              - 'services/${{ inputs.service }}/package-lock.json'
+              - 'services/${{ inputs.service }}/pnpm-lock.yaml'
+              - 'services/${{ inputs.service }}/yarn.lock'
+      - name: Set up Node.js
+        if: steps.changes.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: |
+            services/${{ inputs.service }}/package-lock.json
+            services/${{ inputs.service }}/pnpm-lock.yaml
+            services/${{ inputs.service }}/yarn.lock
+      - name: Install dependencies
+        if: steps.changes.outputs.node == 'true'
+        run: *install-node
+      - name: Run unit tests
+        if: steps.changes.outputs.node == 'true'
+        run: |
+          set -euo pipefail
+          cd services/${{ inputs.service }}
+          if [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm test
+          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm test
+          else
+            yarn test
+          fi

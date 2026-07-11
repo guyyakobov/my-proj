@@ -1,0 +1,30 @@
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'helm/charts/**'
+      
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    steps:
+      - id: changes
+        name: Find changes in services
+        uses: dorny/paths-filter@v4
+        with:
+          list-files: shell
+          filters: |
+            charts:
+              - 'helm/charts/**'
+      - id: extract
+        name: Extract changed services
+        run: |
+          charts=()
+          for path in ${{ steps.changes.outputs.charts_files }}; do
+            charts+=("$(echo "$path" | cut -d/ -f2)")
+          done
+          unique_charts=($(printf "%s\n" "${charts[@]}" | sort -u))
+          json=$(printf '%s\n' "${unique_charts[@]}" | jq -R . | jq -cs .)
+          echo "charts=$json" >> "$GITHUB_OUTPUT"
+    outputs:
+      charts: ${{ steps.extract.outputs.charts }}

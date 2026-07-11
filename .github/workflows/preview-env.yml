@@ -1,0 +1,62 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      strategy:
+        type: string
+        default: "shared-dev" # options: shared-dev, isolated-dev (new namespace), disabled (no preview env)
+
+jobs:
+  preview-env:
+    if: ${{ inputs.strategy != 'disabled' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: helm/charts/${{ inputs.service }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v3'
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/ci/providers/github
+          service_account: ${{ vars.GCP_SA }}
+      - name: Get GKE credentials
+        uses: 'google-github-actions/get-gke-credentials@v3'
+        with:
+          cluster_name: ${{ vars.GCP_CLUSTER_FULL_NAME }} # or {{ vars.GCP_NP_CLUSTER_FULL_NAME }} if using per-environment clusters
+      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-helm@v4
+      - name: Create preview namespace
+        if: inputs.strategy == 'isolated-dev'
+        run: |
+          kubectl create namespace pr-${{ github.event.pull_request.number }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+      # - name: Inject secrets into preview namespace
+      #   if: inputs.strategy == 'isolated-dev'
+      #   run: | 
+      #     to be implemented...
+      - name: Deploy
+        run: |
+          if [[ "${{ inputs.strategy }}" == "shared-dev" ]]; then
+            NAMESPACE="${{ vars.GKE_NAMESPACE }}"
+          elif [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
+            NAMESPACE="pr-${{ github.event.pull_request.number }}"
+          else
+            echo "unsupported strategy: ${{ inputs.strategy }}"
+            exit 1
+          fi
+          helm upgrade -i ${{ inputs.service }} . \
+            -f ../global/values-dev.yaml \
+            -f ../global/values-preview.yaml \
+            -f values-dev.yaml \
+            -f values-preview.yaml \
+            --set image.tag=${{ github.sha }} \
+            --atomic --wait --timeout 5m \
+            --namespace "$NAMESPACE"
