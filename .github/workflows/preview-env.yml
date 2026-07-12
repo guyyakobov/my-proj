@@ -7,6 +7,10 @@ on:
       strategy:
         type: string
         default: "shared-dev" # options: shared-dev, isolated-dev (new namespace), disabled (no preview env)
+      operation:
+        required: true # deploy | cleanup
+        type: string
+
 
 jobs:
   preview-env:
@@ -18,7 +22,21 @@ jobs:
     defaults:
       run:
         working-directory: helm/charts/${{ inputs.service }}
+    env:
+      NAMESPACE: ${{ inputs.strategy == 'isolated-dev'
+        && format('pr-{0}', github.event.pull_request.number)
+        || vars.GKE_NAMESPACE }}
     steps:
+      - name: Validate inputs
+        run: |
+          if [[ ! "${{ inputs.operation }}" =~ ^(deploy|cleanup)$ ]]; then
+            echo "Invalid operation"
+            exit 1
+          fi
+          if [[ ! "${{ inputs.strategy }}" =~ ^(shared-dev|isolated-dev|disabled)$ ]]; then
+            echo "Invalid strategy"
+            exit 1
+          fi
       - name: Checkout code
         uses: actions/checkout@v6
       - id: auth
@@ -33,30 +51,34 @@ jobs:
           cluster_name: ${{ vars.GCP_CLUSTER_FULL_NAME }} # or {{ vars.GCP_NP_CLUSTER_FULL_NAME }} if using per-environment clusters
       - uses: azure/setup-kubectl@v4
       - uses: azure/setup-helm@v4
-      - name: Create preview namespace
-        if: inputs.strategy == 'isolated-dev'
-        run: |
-          kubectl create namespace pr-${{ github.event.pull_request.number }} \
-            --dry-run=client -o yaml | kubectl apply -f -
       # - name: Inject secrets into preview namespace
-      #   if: inputs.strategy == 'isolated-dev'
+      #   if: inputs.strategy == 'isolated-dev' && inputs.operation == 'deploy'
       #   run: | 
       #     to be implemented...
-      - name: Deploy
+      - name: Deploy preview
+        if: ${{ inputs.operation == 'deploy' }}
         run: |
-          if [[ "${{ inputs.strategy }}" == "shared-dev" ]]; then
-            NAMESPACE="${{ vars.GKE_NAMESPACE }}"
-          elif [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
-            NAMESPACE="pr-${{ github.event.pull_request.number }}"
-          else
-            echo "unsupported strategy: ${{ inputs.strategy }}"
-            exit 1
+          if [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
+            kubectl create namespace "$NAMESPACE" \
+              --dry-run=client -o yaml | kubectl apply -f -
           fi
-          helm upgrade -i ${{ inputs.service }} . \
+          helm template "${{ inputs.service }}" . \
             -f ../global/values-dev.yaml \
             -f ../global/values-preview.yaml \
             -f values-dev.yaml \
             -f values-preview.yaml \
-            --set image.tag=${{ github.sha }} \
-            --atomic --wait --timeout 5m \
-            --namespace "$NAMESPACE"
+            --set image.tag="${{ github.sha }}" \
+            | kubectl apply -f - -n "$NAMESPACE"
+          kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m
+      - name: Cleanup preview
+        if: ${{ inputs.operation == 'cleanup' }}
+        run: |
+          if [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
+            kubectl delete namespace "$NAMESPACE" --ignore-not-found
+          else
+            helm template "${{ inputs.service }}" . \
+              -f ../global/values-dev.yaml \
+              -f values-dev.yaml \
+              | kubectl apply -f - -n "$NAMESPACE"
+            kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m       
+          fi

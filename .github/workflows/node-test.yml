@@ -78,7 +78,7 @@ jobs:
             yarn lint
           fi
 
-  unit:
+  unit-test:
     if: ${{ inputs.unit }}
     runs-on: ubuntu-latest
     permissions:
