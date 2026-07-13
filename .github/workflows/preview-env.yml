@@ -80,5 +80,5 @@ jobs:
               -f ../global/values-dev.yaml \
               -f values-dev.yaml \
               | kubectl apply -f - -n "$NAMESPACE"
-            kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m       
+            kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m
           fi

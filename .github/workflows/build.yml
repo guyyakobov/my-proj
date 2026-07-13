@@ -4,13 +4,16 @@ on:
       service:
         required: true
         type: string
+      environment:
+        type: string
+        default: ""
       build-args:
         type: string
         default: ""
 
-
   build:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -39,7 +42,7 @@ on:
         with:
           context: ./services/${{ inputs.service }}
           push: true
-          tags: ${{ vars.GCP_MAIN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/${{ matrix.service }}:${{ env.SHORT_SHA }}
+          tags: ${{ vars.GCP_MAIN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/${{ inputs.service }}:${{ env.SHORT_SHA }}
           cache-from: type=registry,ref=${{ vars.GCP_MAIN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/${{ matrix.service }}:cache
           cache-to: type=registry,ref=${{ vars.GCP_MAIN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/${{ matrix.service }}:cache,mode=max
           build-args: ${{ inputs.build-args }}
