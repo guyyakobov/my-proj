@@ -6,26 +6,24 @@ on:
         type: string
       strategy:
         type: string
-        default: "shared-dev" # options: shared-dev, isolated-dev (new namespace), disabled (no preview env)
+        default: "shared-dev" # shared-dev | isolated-dev | disabled
       operation:
         required: true # deploy | cleanup
         type: string
-
 
 jobs:
   preview-env:
     if: ${{ inputs.strategy != 'disabled' }}
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       id-token: write
+
     defaults:
       run:
         working-directory: helm/charts/${{ inputs.service }}
-    env:
-      NAMESPACE: ${{ inputs.strategy == 'isolated-dev'
-        && format('pr-{0}', github.event.pull_request.number)
-        || vars.GKE_NAMESPACE }}
+
     steps:
       - name: Validate inputs
         run: |
@@ -33,28 +31,46 @@ jobs:
             echo "Invalid operation"
             exit 1
           fi
+
           if [[ ! "${{ inputs.strategy }}" =~ ^(shared-dev|isolated-dev|disabled)$ ]]; then
             echo "Invalid strategy"
             exit 1
           fi
+
+      - name: Set namespace
+        run: |
+          if [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
+            echo "NAMESPACE=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
+          else
+            echo "NAMESPACE=${{ vars.EKS_DEV_NAMESPACE }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v6
-      - id: auth
-        name: Authenticate to Google Cloud
-        uses: 'google-github-actions/auth@v3'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/ci/providers/github
-          service_account: ${{ vars.GCP_SA }}
-      - name: Get GKE credentials
-        uses: 'google-github-actions/get-gke-credentials@v3'
-        with:
-          cluster_name: ${{ vars.GCP_CLUSTER_FULL_NAME }} # or {{ vars.GCP_NP_CLUSTER_FULL_NAME }} if using per-environment clusters
-      - uses: azure/setup-kubectl@v4
-      - uses: azure/setup-helm@v4
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_DEV_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ vars.EKS_DEV_CLUSTER_NAME }}" \
+            --region "${{ vars.AWS_DEV_REGION }}"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
       # - name: Inject secrets into preview namespace
       #   if: inputs.strategy == 'isolated-dev' && inputs.operation == 'deploy'
-      #   run: | 
-      #     to be implemented...
+      #   run: |
+      #     # TODO
+
       - name: Deploy preview
         if: ${{ inputs.operation == 'deploy' }}
         run: |
@@ -62,14 +78,19 @@ jobs:
             kubectl create namespace "$NAMESPACE" \
               --dry-run=client -o yaml | kubectl apply -f -
           fi
+
           helm template "${{ inputs.service }}" . \
             -f ../global/values-dev.yaml \
             -f ../global/values-preview.yaml \
             -f values-dev.yaml \
             -f values-preview.yaml \
             --set image.tag="${{ github.sha }}" \
-            | kubectl apply -f - -n "$NAMESPACE"
-          kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m
+            | kubectl apply -n "$NAMESPACE" -f -
+
+          kubectl rollout status deployment/${{ inputs.service }} \
+            -n "$NAMESPACE" \
+            --timeout=5m
+
       - name: Cleanup preview
         if: ${{ inputs.operation == 'cleanup' }}
         run: |
@@ -79,6 +100,8 @@ jobs:
             helm template "${{ inputs.service }}" . \
               -f ../global/values-dev.yaml \
               -f values-dev.yaml \
-              | kubectl apply -f - -n "$NAMESPACE"
-            kubectl rollout status deployment/${{ inputs.service }} -n "$NAMESPACE" --timeout=5m
-          fi
+              | kubectl apply -n "$NAMESPACE" -f -
+
+            kubectl rollout status deployment/${{ inputs.service }} \
+              -n "$NAMESPACE" \
+              --timeout=5m
