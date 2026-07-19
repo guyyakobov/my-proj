@@ -34,12 +34,12 @@ on:
           aws ecr put-image \
             --repository-name "${{ inputs.service }}" \
             --image-tag "${{inputs.environment}}" \
-            --image-manifest "$MANIFEST"
-          if [[ "${{inputs.environment}}" == "prod" ]]; then
+            --image-manifest $MANIFEST
+          if [ "${{inputs.environment}}" == prod ]; then
             aws ecr put-image \
               --repository-name "${{ inputs.service }}" \
               --image-tag "${{inputs.environment}}-$SHORT_SHA" \
-              --image-manifest "$MANIFEST"
+              --image-manifest $MANIFEST
           fi  
       - name: Checkout code
         uses: actions/checkout@v4

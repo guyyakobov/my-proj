@@ -15,7 +15,9 @@ jobs:
   preview-env:
     if: ${{ inputs.strategy != 'disabled' }}
     runs-on: ubuntu-latest
-
+    
+    environment: dev
+    
     permissions:
       contents: read
       id-token: write
@@ -52,12 +54,12 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_DEV_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
-            --name "${{ vars.EKS_DEV_CLUSTER_NAME }}" \
+            --name "${{ vars.AWS_EKS_CLUSTER_NAME }}" \
             --region "${{ vars.AWS_DEV_REGION }}"
 
       - name: Install kubectl
