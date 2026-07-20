@@ -9,20 +9,27 @@ on:
         default: ""
 jobs:
   sync:
+    runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
       - name: Install Argo CD CLI
         run: |
           if command -v argocd >/dev/null 2>&1 &&
-            argocd version --client | grep -q "$ARGOCD_VERSION"; then
-            echo "Argo CD $ARGOCD_VERSION already installed"
+            argocd version --client | grep -q "${{vars.ARGOCD_VERSION}}"; then
+            echo "Argo CD ${{vars.ARGOCD_VERSION}} already installed"
             exit 0
           fi
           sudo curl -fsSL \
             -o /usr/local/bin/argocd \
-            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
+            "https://github.com/argoproj/argo-cd/releases/download/${{vars.ARGOCD_VERSION}}/argocd-linux-amd64"
           sudo chmod +x /usr/local/bin/argocd
           argocd version --client
       - name: Sync application
-        run : | 
-          argocd sync -l "${{ inputs.service }}" "${{ inputs.environment }}"          
+        run : |
+          set -euo pipefail
+          echo "Syncing applications with the following labels: service=${{ inputs.service }} and env=${{ inputs.environment }}"
+          argocd app sync -l service="${{ inputs.service }}",env="${{ inputs.environment }}" \
+            --grpc-web \
+            --server "${{vars.ARGOCD_SERVER}}" \
+            --auth-token "${{secrets.ARGOCD_AUTH_TOKEN}}"
+            --timeout 600      
