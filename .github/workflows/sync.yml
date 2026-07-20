@@ -1,0 +1,28 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      environment:
+        type: string
+        default: ""
+jobs:
+  sync:
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Install Argo CD CLI
+        run: |
+          if command -v argocd >/dev/null 2>&1 &&
+            argocd version --client | grep -q "$ARGOCD_VERSION"; then
+            echo "Argo CD $ARGOCD_VERSION already installed"
+            exit 0
+          fi
+          sudo curl -fsSL \
+            -o /usr/local/bin/argocd \
+            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
+          sudo chmod +x /usr/local/bin/argocd
+          argocd version --client
+      - name: Sync application
+        run : | 
+          argocd sync -l "${{ inputs.service }}" "${{ inputs.environment }}"          
