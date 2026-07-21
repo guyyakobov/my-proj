@@ -16,29 +16,54 @@ on:
       unit:
         type: boolean
         default: true
+        
 jobs:
   lint:
     if: ${{ inputs.lint }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     defaults:
       run:
         working-directory: services/${{ inputs.service }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate package manager
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.package-manager }}" != "npm" ] &&
+            [ "${{ inputs.package-manager }}" != "pnpm" ] &&
+            [ "${{ inputs.package-manager }}" != "yarn" ]; then
+            echo "Unsupported package manager: ${{ inputs.package-manager }}"
+            echo "Supported package managers: npm, pnpm, yarn"
+            exit 1
+          fi
+
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@v4
         with:
           filters: |
             node:
-              - 'services/${{ inputs.service }}/**/*.js'
-              - 'services/${{ inputs.service }}/**/*.jsx'
-              - 'services/${{ inputs.service }}/**/*.ts'
-              - 'services/${{ inputs.service }}/**/*.tsx'
+              - added|modified: 'services/${{ inputs.service }}/**/*.js'
+              - added|modified: 'services/${{ inputs.service }}/**/*.jsx'
+              - added|modified: 'services/${{ inputs.service }}/**/*.ts'
+              - added|modified: 'services/${{ inputs.service }}/**/*.tsx'
+
       - name: Set up Node.js
+        if: steps.changes.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        if: steps.changes.outputs.node == 'true' && inputs.package-manager != 'npm'
+        run: corepack enable
+
+      - name: Set up Node.js cache
         if: steps.changes.outputs.node == 'true'
         uses: actions/setup-node@v5
         with:
@@ -48,34 +73,27 @@ jobs:
             services/${{ inputs.service }}/package-lock.json
             services/${{ inputs.service }}/pnpm-lock.yaml
             services/${{ inputs.service }}/yarn.lock
+
       - name: Install dependencies
         if: steps.changes.outputs.node == 'true'
         run: &install-node |
           set -euo pipefail
-          cd services/${{ inputs.service }}
           if [ "${{ inputs.package-manager }}" = "npm" ]; then
             npm ci
           elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-            corepack enable
             pnpm install --frozen-lockfile
           elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
-            corepack enable
             yarn install --immutable
-          else
-            echo "Unsupported package manager"
-            exit 1
           fi
+
       - name: Run linter
         if: steps.changes.outputs.node == 'true'
         run: |
           set -euo pipefail
-          cd services/${{ inputs.service }}
           if [ "${{ inputs.package-manager }}" = "npm" ]; then
             npm run lint
-          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-            pnpm lint
           else
-            yarn lint
+            ${{ inputs.package-manager }} lint
           fi
 
   unit-test:
@@ -83,9 +101,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate package manager
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.package-manager }}" != "npm" ] &&
+            [ "${{ inputs.package-manager }}" != "pnpm" ] &&
+            [ "${{ inputs.package-manager }}" != "yarn" ]; then
+            echo "Unsupported package manager: ${{ inputs.package-manager }}"
+            echo "Supported package managers: npm, pnpm, yarn"
+            exit 1
+          fi
 
       - name: Get changed files
         id: changes
@@ -93,15 +126,26 @@ jobs:
         with:
           filters: |
             node:
-              - 'services/${{ inputs.service }}/**/*.js'
-              - 'services/${{ inputs.service }}/**/*.jsx'
-              - 'services/${{ inputs.service }}/**/*.ts'
-              - 'services/${{ inputs.service }}/**/*.tsx'
-              - 'services/${{ inputs.service }}/package.json'
-              - 'services/${{ inputs.service }}/package-lock.json'
-              - 'services/${{ inputs.service }}/pnpm-lock.yaml'
-              - 'services/${{ inputs.service }}/yarn.lock'
+              - added|modified: 'services/${{ inputs.service }}/**/*.js'
+              - added|modified: 'services/${{ inputs.service }}/**/*.jsx'
+              - added|modified: 'services/${{ inputs.service }}/**/*.ts'
+              - added|modified: 'services/${{ inputs.service }}/**/*.tsx'
+              - added|modified: 'services/${{ inputs.service }}/package.json'
+              - added|modified: 'services/${{ inputs.service }}/package-lock.json'
+              - added|modified: 'services/${{ inputs.service }}/pnpm-lock.yaml'
+              - added|modified: 'services/${{ inputs.service }}/yarn.lock'
+
       - name: Set up Node.js
+        if: steps.changes.outputs.node == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        if: steps.changes.outputs.node == 'true' && inputs.package-manager != 'npm'
+        run: corepack enable
+
+      - name: Set up Node.js cache
         if: steps.changes.outputs.node == 'true'
         uses: actions/setup-node@v5
         with:
@@ -111,18 +155,11 @@ jobs:
             services/${{ inputs.service }}/package-lock.json
             services/${{ inputs.service }}/pnpm-lock.yaml
             services/${{ inputs.service }}/yarn.lock
+
       - name: Install dependencies
         if: steps.changes.outputs.node == 'true'
         run: *install-node
+
       - name: Run unit tests
         if: steps.changes.outputs.node == 'true'
-        run: |
-          set -euo pipefail
-          cd services/${{ inputs.service }}
-          if [ "${{ inputs.package-manager }}" = "npm" ]; then
-            npm test
-          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-            pnpm test
-          else
-            yarn test
-          fi
+        run: ${{ inputs.package-manager }} test

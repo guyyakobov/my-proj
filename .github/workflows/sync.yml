@@ -25,6 +25,7 @@ jobs:
             "https://github.com/argoproj/argo-cd/releases/download/${{vars.ARGOCD_VERSION}}/argocd-linux-amd64"
           sudo chmod +x /usr/local/bin/argocd
           argocd version --client
+          
       - name: Sync application
         run: |
           set -euo pipefail

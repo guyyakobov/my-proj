@@ -5,9 +5,9 @@ on:
         required: true
         type: string
       environment:
+        required: true
         type: string
-        default: ""
-
+  
 jobs:
   tag-image:
     runs-on: ubuntu-latest
@@ -15,16 +15,21 @@ jobs:
     permissions:
       contents: 'write'
       id-token: 'write'
+    defaults:
+      run:
+        working-directory: helm/charts/${{ inputs.service }}
     steps:
       - name: Set short SHA
         run: |
           SHA="${{ github.event.pull_request.head.sha }}"
           echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
+          
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_ECR_REGION }}
+
       - name: promote image to ${{ inputs.environment }} in the registry
         run: |
           MANIFEST=$(aws ecr batch-get-image \
@@ -42,12 +47,15 @@ jobs:
               --image-tag "${{inputs.environment}}-$SHORT_SHA" \
               --image-manifest "$MANIFEST"
           fi  
+
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Update Helm image tag
         uses: mikefarah/yq@v4
         with:
@@ -55,3 +63,10 @@ jobs:
             cd helm/charts/${{ inputs.service }}
             yq -i '.image.tag = env(SHORT_SHA)' values-${{ inputs.environment }}.yaml
 
+      - name: Commit and push changes
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git checkout "${{ github.event.pull_request.base.ref }}"
+          git add values-${{ inputs.environment }}.yaml
+          git commit -m "Update image tag to $SHORT_SHA for ${{ inputs.environment }}"
+          git push

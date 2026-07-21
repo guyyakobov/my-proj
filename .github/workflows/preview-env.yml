@@ -15,18 +15,17 @@ jobs:
   preview-env:
     if: ${{ inputs.strategy != 'disabled' }}
     runs-on: ubuntu-latest
-    
     environment: dev
-    
     permissions:
       contents: read
       id-token: write
-
     defaults:
       run:
         working-directory: helm/charts/${{ inputs.service }}
-
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Validate inputs
         run: |
           if [[ ! "${{ inputs.operation }}" =~ ^(deploy|cleanup)$ ]]; then
@@ -38,6 +37,10 @@ jobs:
             echo "Invalid strategy"
             exit 1
           fi
+      - name: Set short SHA
+        run: |
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
 
       - name: Set namespace
         run: |
@@ -46,9 +49,6 @@ jobs:
           else
             echo "NAMESPACE=${{ vars.EKS_DEV_NAMESPACE }}" >> "$GITHUB_ENV"
           fi
-
-      - name: Checkout code
-        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -60,13 +60,17 @@ jobs:
         run: |
           aws eks update-kubeconfig \
             --name "${{ vars.AWS_EKS_CLUSTER_NAME }}" \
-            --region "${{ vars.AWS_DEV_REGION }}"
+            --region "${{ vars.AWS_REGION }}"
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
+        with:
+          version: "${{vars.KUBECTL_VERSION}}"
 
       - name: Install Helm
         uses: azure/setup-helm@v4
+        with:
+          version: "${{vars.HELM_VERSION}}"
 
       # - name: Inject secrets into preview namespace
       #   if: inputs.strategy == 'isolated-dev' && inputs.operation == 'deploy'
@@ -86,7 +90,7 @@ jobs:
             -f ../global/values-preview.yaml \
             -f values-dev.yaml \
             -f values-preview.yaml \
-            --set image.tag="${{ github.sha }}" \
+            --set image.tag="$SHORT_SHA" \
             | kubectl apply -n "$NAMESPACE" -f -
 
           kubectl rollout status deployment/${{ inputs.service }} \

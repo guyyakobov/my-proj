@@ -22,23 +22,48 @@ on:
       test-command:
         type: string
         default: "python -m unittest discover -s tests"
+
 jobs:
   lint:
     if: ${{ inputs.lint }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate linter and package manager
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.linter }}" != "ruff" ] && [ "${{ inputs.linter }}" != "pylint" ]; then
+            echo "Unsupported linter: ${{ inputs.linter }}"
+            echo "Supported linters: ruff, pylint"
+            exit 1
+          fi
+          if [ "${{ inputs.package-manager }}" != "pip" ] && [ "${{ inputs.package-manager }}" != "poetry" ]; then
+            echo "Unsupported package manager: ${{ inputs.package-manager }}"
+            echo "Supported package managers: pip, poetry"
+            exit 1
+          fi
+
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@v4
         with:
           list-files: shell
-          filters: |
+          filters: |    
             python:
-              - 'services/${{ inputs.service }}/**/*.py'
+              - added|modified: 'services/${{ inputs.service }}/**/*.py'
+
+      - name: Install Poetry
+        if: inputs.package-manager == 'poetry'
+        run: pipx install poetry
+
       - name: Set up Python
         if: steps.changes.outputs.python == 'true'
         uses: actions/setup-python@v5
@@ -49,11 +74,11 @@ jobs:
             services/${{ inputs.service }}/requirements*.txt
             services/${{ inputs.service }}/pyproject.toml
             services/${{ inputs.service }}/poetry.lock
+
       - name: Install  dependencies
         if: steps.changes.outputs.python == 'true' && inputs.linter == 'pylint'
         run: &install-python |
           set -euo pipefail
-          cd services/${{ inputs.service }}
           if [ "${{ inputs.package-manager }}" = "pip" ]; then
             if [ -f requirements.txt ]; then
               python -m pip install -r requirements.txt
@@ -61,24 +86,22 @@ jobs:
               python -m pip install -e .
             fi
           elif [ "${{ inputs.package-manager }}" = "poetry" ]; then
-            python -m pip install poetry
             poetry install
-          else
-            echo "Unsupported package manager"
-            exit 1
           fi
+
       - name: Run linter
         if: steps.changes.outputs.python == 'true'
         run: |
           set -euo pipefail
+          files=()
+          for file in ${{ steps.changes.outputs.python_files }}; do
+            files+=("$(echo "$file" | cut -d'/' -f3-)")
+          done
           python -m pip install ${{ inputs.linter }}
           if [ "${{ inputs.linter }}" = "ruff" ]; then
-            ruff check ${{ steps.changes.outputs.python_files }}
+            ruff check "${files[@]}"
           elif [ "${{ inputs.linter }}" = "pylint" ]; then
-            pylint ${{ steps.changes.outputs.python_files }}
-          else
-            echo "Unsupported linter: ${{ inputs.linter }}"
-            exit 1
+            pylint "${files[@]}"
           fi
 
   unit:
@@ -86,21 +109,40 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate package manager
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.package-manager }}" != "pip" ] && [ "${{ inputs.package-manager }}" != "poetry" ]; then
+            echo "Unsupported package manager: ${{ inputs.package-manager }}"
+            echo "Supported package managers: pip, poetry"
+            exit 1
+          fi
+
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@v4
         with:
           filters: |
-            python:
-              - 'services/${{ inputs.service }}/**/*.py'
-              - 'services/${{ inputs.service }}/requirements.txt'
-              - 'services/${{ inputs.service }}/pyproject.toml'
-              - 'services/${{ inputs.service }}/poetry.lock'
+            unit:
+              - added|modified: 'services/${{ inputs.service }}/**/*.py'
+              - added|modified: 'services/${{ inputs.service }}/requirements*.txt'
+              - added|modified: 'services/${{ inputs.service }}/pyproject.toml'
+              - added|modified: 'services/${{ inputs.service }}/poetry.lock'
+
+      - name: Install Poetry
+        if: inputs.package-manager == 'poetry'
+        run: pipx install poetry
+        
       - name: Set up Python
-        if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.unit == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
@@ -109,12 +151,13 @@ jobs:
             services/${{ inputs.service }}/requirements*.txt
             services/${{ inputs.service }}/pyproject.toml
             services/${{ inputs.service }}/poetry.lock
+
       - name: Install dependencies
-        if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.unit == 'true'
         run: *install-python
+
       - name: Run unit tests
-        if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.unit == 'true'
         run: |
           set -euo pipefail
-          cd services/${{ inputs.service }}
           ${{ inputs.test-command }}
