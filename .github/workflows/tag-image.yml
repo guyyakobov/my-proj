@@ -8,11 +8,12 @@ on:
         type: string
         default: ""
 
-  build:
+jobs:
+  tag-image:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     permissions:
-      contents: 'read'
+      contents: 'write'
       id-token: 'write'
     steps:
       - name: Set short SHA
@@ -43,6 +44,10 @@ on:
           fi  
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Update Helm image tag
         uses: mikefarah/yq@v4
         with:

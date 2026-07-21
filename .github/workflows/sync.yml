@@ -5,8 +5,9 @@ on:
         required: true
         type: string
       environment:
+        required: true
         type: string
-        default: ""
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -15,7 +16,7 @@ jobs:
       - name: Install Argo CD CLI
         run: |
           if command -v argocd >/dev/null 2>&1 &&
-            argocd version --client | grep -q "${{vars.ARGOCD_VERSION}}"; then
+            argocd version --client | grep -Fq "${{vars.ARGOCD_VERSION}}"; then
             echo "Argo CD ${{vars.ARGOCD_VERSION}} already installed"
             exit 0
           fi
@@ -25,11 +26,11 @@ jobs:
           sudo chmod +x /usr/local/bin/argocd
           argocd version --client
       - name: Sync application
-        run : |
+        run: |
           set -euo pipefail
           echo "Syncing applications with the following labels: service=${{ inputs.service }} and env=${{ inputs.environment }}"
           argocd app sync -l service="${{ inputs.service }}",env="${{ inputs.environment }}" \
             --grpc-web \
-            --server "${{vars.ARGOCD_SERVER}}" \
-            --auth-token "${{secrets.ARGOCD_AUTH_TOKEN}}"
+            --server "${{ vars.ARGOCD_SERVER }}" \
+            --auth-token "${{ secrets.ARGOCD_AUTH_TOKEN }}" \
             --timeout 600      
