@@ -28,3 +28,14 @@ jobs:
           echo "charts=$json" >> "$GITHUB_OUTPUT"
     outputs:
       charts: ${{ steps.extract.outputs.charts }}
+
+  validate-helm:
+    runs-on: ubuntu-latest
+    matrix : ${{outputs.jobs.changes.charts }} #fix later
+    defaults:
+      run:
+        working-directory: helm/charts/${{ inputs.service }}
+    steps:
+      - name: Update helm dependencies
+        run: 
+      

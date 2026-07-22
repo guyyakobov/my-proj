@@ -84,7 +84,7 @@ jobs:
             kubectl create namespace "$NAMESPACE" \
               --dry-run=client -o yaml | kubectl apply -f -
           fi
-
+          helm dependency update
           helm template "${{ inputs.service }}" . \
             -f ../global/values-dev.yaml \
             -f ../global/values-preview.yaml \
