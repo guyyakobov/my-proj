@@ -12,14 +12,13 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    env:
+      ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
+      ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+      ARGOCD_OPTS: --grpc-web
     steps:
       - name: Install Argo CD CLI
         run: |
-          if command -v argocd >/dev/null 2>&1 &&
-            argocd version --client | grep -Fq "${{vars.ARGOCD_VERSION}}"; then
-            echo "Argo CD ${{vars.ARGOCD_VERSION}} already installed"
-            exit 0
-          fi
           sudo curl -fsSL \
             -o /usr/local/bin/argocd \
             "https://github.com/argoproj/argo-cd/releases/download/${{vars.ARGOCD_VERSION}}/argocd-linux-amd64"
@@ -29,9 +28,18 @@ jobs:
       - name: Sync application
         run: |
           set -euo pipefail
+          SELECTOR='service=${{ inputs.service }},env=${{ inputs.environment }}'
+
           echo "Syncing applications with the following labels: service=${{ inputs.service }} and env=${{ inputs.environment }}"
-          argocd app sync -l service="${{ inputs.service }}",env="${{ inputs.environment }}" \
-            --grpc-web \
-            --server "${{ vars.ARGOCD_SERVER }}" \
-            --auth-token "${{ secrets.ARGOCD_AUTH_TOKEN }}" \
-            --timeout 600      
+          argocd app sync \
+            -l "$SELECTOR" \
+            --async
+          
+          echo "Waiting for applications to be healthy and synced..."
+          argocd app wait \
+            -l "$SELECTOR" \
+            --sync \
+            --health \
+            --timeout 600
+ac
+          

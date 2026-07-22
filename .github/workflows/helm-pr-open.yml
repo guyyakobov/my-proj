@@ -21,7 +21,7 @@ jobs:
         run: |
           charts=()
           for path in ${{ steps.changes.outputs.charts_files }}; do
-            charts+=("$(echo "$path" | cut -d/ -f2)")
+            charts+=("$(echo "$path" | cut -d/ -f3)")
           done
           unique_charts=($(printf "%s\n" "${charts[@]}" | sort -u))
           json=$(printf '%s\n' "${unique_charts[@]}" | jq -R . | jq -cs .)
@@ -31,11 +31,23 @@ jobs:
 
   validate-helm:
     runs-on: ubuntu-latest
-    matrix : ${{outputs.jobs.changes.charts }} #fix later
+    strategy:
+      matrix:
+        service: ${{fromJSON(needs.changes.outputs.charts)}}
+        fail-fast: false
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: helm/charts/${{ inputs.service }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Update helm dependencies
-        run: 
+        run: helm dependency update
+
+      - name: Lint helm chart
+        run: |
+          helm lint 
       
