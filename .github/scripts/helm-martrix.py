@@ -1,16 +1,23 @@
 import  json
+import os
 
-files_json = os.getenv("CHANGED_FILES_JSON", "[]")
-changed_files = json.loads(files_json)
+github_output = os.environ["GITHUB_OUTPUT"]
+files_json = os.environ["CHANGED_FILES"]
+files = json.loads(files_json)
 
-matrix=[]
+matrix = []
 
-for file  in changed_files:
+for file in files:
   segments = file.split('/')
-  entry = {
-    "service": segments[2],
-    "values-file": segments[3]
-  }
-  matrix.append(entry)
+  service = segments[2]
+  values_file = segments[3]
+  matrix.append({
+      "service": service,
+      "values_file": values_file
+    })
 
 matrix_json = json.dumps(matrix)
+
+with open(github_output, "a") as f:
+    f.write(f"matrix={matrix_json}\n")
+    
