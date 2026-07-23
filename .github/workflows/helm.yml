@@ -1,0 +1,116 @@
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'helm/charts/**'
+      
+jobs:
+  changes:
+    if: >
+        github.event.action != 'closed' ||
+        github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - id: changes
+        name: Find changed files
+        uses: dorny/paths-filter@v4
+        with:
+          list-files: json
+          filters: |
+            changed:
+              - 'helm/charts/*/Chart.yaml'
+              - 'helm/charts/*/values.yaml'
+              - added|modified: 'helm/charts/*/values-*.yaml'
+              - 'helm/charts/*/templates/**'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - id: generate-matrix
+        name: Generate helm matrix
+        env:
+          CHANGED_FILES: ${{ steps.changes.outputs.changed_files }}
+        run: | 
+          cd .github/scripts
+          python generate-helm-matrix.py
+
+  validate-helm:
+    if: >
+      github.event.action == 'opened' ||
+      github.event.action == 'synchronize' ||
+      github.event.action == 'reopened'
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy: 
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: helm/charts/${{ matrix.service }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Install kubeconform
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
+
+      - name: Update helm dependencies
+        run: helm dependency update
+
+      - name: Lint helm chart
+        run: |
+          helm lint . \
+            -f ../../global-values/values.yaml \
+            -f ../../global-values/values-${{ matrix.environment }}.yaml \
+            -f values.yaml \
+            -f values-${{ matrix.environment }}.yaml \
+            --strict
+
+      - name: Validate Kubernetes manifests
+        run: |
+          helm template ${{ matrix.service }} . \
+            -f ../../global-values/values.yaml \
+            -f ../../global-values/values-${{ matrix.environment }}.yaml \
+            -f values.yaml \
+            -f values-${{ matrix.environment }}.yaml \
+          | kubeconform \
+              -strict \
+              -summary
+
+  sync:
+    if: >
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    needs: changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
+
+    uses: ./.github/workflows/reusable-sync.yml
+    with:
+      service: ${{ matrix.service }}
+      environment: ${{ matrix.environment }}

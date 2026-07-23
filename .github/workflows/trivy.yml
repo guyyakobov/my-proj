@@ -1,0 +1,38 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+
+jobs:
+  trivy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_ECR_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set short SHA
+        run: |
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ vars.ECR_REGISTRY }}/${{ inputs.service }}:${{ env.SHORT_SHA }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
