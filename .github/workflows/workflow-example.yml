@@ -1,0 +1,14 @@
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'services/example/**'
+    
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-workflow-node.yml
+    with:
+      service: example
+      preview-strategy: isolated-dev
+    secrets: inherit
