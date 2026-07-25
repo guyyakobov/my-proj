@@ -81,7 +81,7 @@ These workflows depend on repository variables and secrets being configured in G
 
 ## How to use a reusable workflow
 
-A simple example is already provided in [workflow-example.yml](workflow-example.yml). It shows how to call the reusable Node workflow for a service:
+A simple example is already provided in [workflow-example.yml](workflow-example.yml). It shows how to call the reusable Node workflow for a service and override a few common options:
 
 ```yaml
 jobs:
@@ -90,10 +90,12 @@ jobs:
     with:
       service: example
       preview-strategy: isolated-dev
+      node-version: "18"
+      package-manager: "pnpm"
     secrets: inherit
 ```
 
-The Node and Python entrypoints also accept optional inputs such as build arguments and preview strategy.
+The Node and Python entrypoints also accept optional inputs such as build arguments, preview strategy, package manager, and version settings.
 
 ## Notes
 

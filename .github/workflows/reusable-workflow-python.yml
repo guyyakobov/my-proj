@@ -5,6 +5,30 @@ on:
         description: Service directory and image name
         required: true
         type: string
+      python-version:
+        description: Python version to use
+        type: string
+        default: "3.12"
+      package-manager:
+        description: Package manager to use for installs
+        type: string
+        default: "pip"
+      lint:
+        description: Run linting
+        type: boolean
+        default: true
+      linter:
+        description: Linter to use
+        type: string
+        default: "ruff"
+      unit:
+        description: Run unit tests
+        type: boolean
+        default: true
+      test-command:
+        description: Command used to run unit tests
+        type: string
+        default: "python -m unittest discover -s tests"
       build-args:
         description: Docker build arguments
         type: string
@@ -18,7 +42,7 @@ jobs:
   sonar:
     if: >-
       contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
-    uses: ./.github/workflows/sonar.yml
+    uses: ./.github/workflows/reusable-sonar.yml
     with:
       service: ${{ inputs.service }}
     secrets: inherit
@@ -26,14 +50,20 @@ jobs:
   python:
     if: >-
       contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
-    uses: ./.github/workflows/python.yml
+    uses: ./.github/workflows/reusable-python.yml
     with:
       service: ${{ inputs.service }}
+      python-version: ${{ inputs.python-version }}
+      package-manager: ${{ inputs.package-manager }}
+      lint: ${{ inputs.lint }}
+      linter: ${{ inputs.linter }}
+      unit: ${{ inputs.unit }}
+      test-command: ${{ inputs.test-command }}
     secrets: inherit
 
   build:
     needs: [sonar, python]
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ inputs.service }}
       build-args: ${{ inputs.build-args }}
@@ -41,14 +71,14 @@ jobs:
 
   trivy:
     needs: build
-    uses: ./.github/workflows/trivy.yml
+    uses: ./.github/workflows/reusable-trivy.yml
     with:
       service: ${{ inputs.service }}
     secrets: inherit
 
   preview-deploy:
     needs: trivy
-    uses: ./.github/workflows/preview-env.yml
+    uses: ./.github/workflows/reusable-preview.yml
     with:
       service: ${{ inputs.service }}
       strategy: ${{ inputs.preview-strategy }}
@@ -57,26 +87,26 @@ jobs:
 
   preview-cleanup:
     if: github.event.action == 'closed'
-    uses: ./.github/workflows/preview-env.yml
+    uses: ./.github/workflows/reusable-preview.yml
     with:
       service: ${{ inputs.service }}
       strategy: ${{ inputs.preview-strategy }}
       operation: cleanup
     secrets: inherit
 
-  tag-image-dev:
+  promote-dev:
     if: >-
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true
-    uses: ./.github/workflows/tag-image.yml
+    uses: ./.github/workflows/reusable-promote.yml
     with:
       service: ${{ inputs.service }}
       environment: dev
     secrets: inherit
 
-  tag-image-staging:
-    needs: tag-image-dev
-    uses: ./.github/workflows/tag-image.yml
+  promote-staging:
+    needs: promote-dev
+    uses: ./.github/workflows/reusable-promote.yml
     with:
       service: ${{ inputs.service }}
       environment: staging
@@ -84,23 +114,23 @@ jobs:
 
   sync-staging:
     needs: tag-image-staging
-    uses: ./.github/workflows/sync.yml
+    uses: ./.github/workflows/reusable-sync.yml
     with:
       service: ${{ inputs.service }}
       environment: staging
     secrets: inherit
 
-  tag-image-prod:
+  promote-prod:
     needs: sync-staging
-    uses: ./.github/workflows/tag-image.yml
+    uses: ./.github/workflows/reusable-promote.yml
     with:
       service: ${{ inputs.service }}
       environment: prod
     secrets: inherit
 
   sync-prod:
-    needs: tag-image-prod
-    uses: ./.github/workflows/sync.yml
+    needs: promote-prod
+    uses: ./.github/workflows/reusable-sync.yml
     with:
       service: ${{ inputs.service }}
       environment: prod

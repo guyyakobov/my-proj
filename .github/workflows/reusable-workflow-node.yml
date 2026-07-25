@@ -5,6 +5,22 @@ on:
         description: Service directory and image name
         required: true
         type: string
+      node-version:
+        description: Node.js version to use
+        type: string
+        default: "22"
+      package-manager:
+        description: Package manager to use for install and scripts
+        type: string
+        default: "npm"
+      lint:
+        description: Run linting
+        type: boolean
+        default: true
+      unit:
+        description: Run unit tests
+        type: boolean
+        default: true
       build-args:
         description: Docker build arguments
         type: string
@@ -29,6 +45,10 @@ jobs:
     uses: ./.github/workflows/reusable-node.yml
     with:
       service: ${{ inputs.service }}
+      node-version: ${{ inputs.node-version }}
+      package-manager: ${{ inputs.package-manager }}
+      lint: ${{ inputs.lint }}
+      unit: ${{ inputs.unit }}
     secrets: inherit
 
   build:
@@ -64,7 +84,7 @@ jobs:
       operation: cleanup
     secrets: inherit
 
-  prmote-dev:
+  promote-dev:
     if: >-
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true

@@ -11,4 +11,6 @@ jobs:
     with:
       service: example
       preview-strategy: isolated-dev
+      node-version: "18"
+      package-manager: "pnpm"
     secrets: inherit
