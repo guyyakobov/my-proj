@@ -86,8 +86,10 @@ jobs:
           fi
           helm dependency update
           helm template "${{ inputs.service }}" . \
-            -f ../global/values-dev.yaml \
-            -f ../global/values-preview.yaml \
+            -f ../../global-values/values.yaml \
+            -f ../../global-values/values-dev.yaml \
+            -f ../../global-values/values-preview.yaml \
+            -f values.yaml \
             -f values-dev.yaml \
             -f values-preview.yaml \
             --set image.tag="$SHORT_SHA" \
@@ -104,7 +106,9 @@ jobs:
             kubectl delete namespace "$NAMESPACE" --ignore-not-found
           else
             helm template "${{ inputs.service }}" . \
-              -f ../global/values-dev.yaml \
+              -f ../../global-values/values.yaml \
+              -f ../../global-values/values-dev.yaml \
+              -f values.yaml \
               -f values-dev.yaml \
               | kubectl apply -n "$NAMESPACE" -f -
 

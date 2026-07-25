@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - id: changes
+      - id: changes 
         name: Find changed files
         uses: dorny/paths-filter@v4
         with:
@@ -46,10 +46,8 @@ jobs:
           python generate-helm-matrix.py
 
   validate-helm:
-    if: >
-      github.event.action == 'opened' ||
-      github.event.action == 'synchronize' ||
-      github.event.action == 'reopened'
+    if: >-
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
     needs: changes
     runs-on: ubuntu-latest
     strategy: 
@@ -105,12 +103,13 @@ jobs:
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true
     needs: changes
+    environment: ${{ matrix.environment }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.matrix) }}
-
-    uses: ./.github/workflows/reusable-sync.yml
+    uses: ./.github/workflows/reuable-sync.yml
     with:
       service: ${{ matrix.service }}
       environment: ${{ matrix.environment }}
+    secrets: inherit

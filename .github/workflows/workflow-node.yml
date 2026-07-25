@@ -1,0 +1,107 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service directory and image name
+        required: true
+        type: string
+      build-args:
+        description: Docker build arguments
+        type: string
+        default: ""
+      preview-strategy:
+        description: Preview environment strategy e.g. shared-dev, isolated-dev, disabled
+        type: string
+        default: "shared-dev"
+
+jobs:
+  sonar:
+    if: >-
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+    uses: ./.github/workflows/reusable-sonar.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  node:
+    if: >-
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+    uses: ./.github/workflows/reusable-node.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  build:
+    needs: [sonar, node]
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      service: ${{ inputs.service }}
+      build-args: ${{ inputs.build-args }}
+    secrets: inherit
+
+  trivy:
+    needs: build
+    uses: ./.github/workflows/reusable-trivy.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  preview-deploy:
+    needs: trivy
+    uses: ./.github/workflows/reusable-preview.yml
+    with:
+      service: ${{ inputs.service }}
+      strategy: ${{ inputs.preview-strategy }}
+      operation: deploy
+    secrets: inherit
+
+  preview-cleanup:
+    if: github.event.action == 'closed'
+    uses: ./.github/workflows/reusable-preview.yml
+    with:
+      service: ${{ inputs.service }}
+      strategy: ${{ inputs.preview-strategy }}
+      operation: cleanup
+    secrets: inherit
+
+  prmote-dev:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: dev
+    secrets: inherit
+
+  promote-staging:
+    needs: promote-dev
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: staging
+    secrets: inherit
+
+  sync-staging:
+    needs: tag-image-staging
+    uses: ./.github/workflows/reusable-sync.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: staging
+    secrets: inherit
+
+  promote-prod:
+    needs: sync-staging
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: prod
+    secrets: inherit
+
+  sync-prod:
+    needs: promote-prod
+    uses: ./.github/workflows/reusable-sync.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: prod
+    secrets: inherit

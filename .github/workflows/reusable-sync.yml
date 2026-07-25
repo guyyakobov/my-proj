@@ -32,7 +32,8 @@ jobs:
           echo "Syncing applications with the following labels: service=${{ inputs.service }} and env=${{ inputs.environment }}"
           argocd app sync \
             -l "$SELECTOR" \
-            --async
+            --async \
+            --apply-out-of-sync-only \
           
           echo "Waiting for applications to be healthy and synced..."
           argocd app wait \

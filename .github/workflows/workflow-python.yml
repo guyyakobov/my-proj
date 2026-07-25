@@ -1,0 +1,107 @@
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service directory and image name
+        required: true
+        type: string
+      build-args:
+        description: Docker build arguments
+        type: string
+        default: ""
+      preview-strategy:
+        description: Preview environment strategy e.g. shared-dev, isolated-dev, disabled
+        type: string
+        default: "shared-dev"
+
+jobs:
+  sonar:
+    if: >-
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+    uses: ./.github/workflows/sonar.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  python:
+    if: >-
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+    uses: ./.github/workflows/python.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  build:
+    needs: [sonar, python]
+    uses: ./.github/workflows/build.yml
+    with:
+      service: ${{ inputs.service }}
+      build-args: ${{ inputs.build-args }}
+    secrets: inherit
+
+  trivy:
+    needs: build
+    uses: ./.github/workflows/trivy.yml
+    with:
+      service: ${{ inputs.service }}
+    secrets: inherit
+
+  preview-deploy:
+    needs: trivy
+    uses: ./.github/workflows/preview-env.yml
+    with:
+      service: ${{ inputs.service }}
+      strategy: ${{ inputs.preview-strategy }}
+      operation: deploy
+    secrets: inherit
+
+  preview-cleanup:
+    if: github.event.action == 'closed'
+    uses: ./.github/workflows/preview-env.yml
+    with:
+      service: ${{ inputs.service }}
+      strategy: ${{ inputs.preview-strategy }}
+      operation: cleanup
+    secrets: inherit
+
+  tag-image-dev:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    uses: ./.github/workflows/tag-image.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: dev
+    secrets: inherit
+
+  tag-image-staging:
+    needs: tag-image-dev
+    uses: ./.github/workflows/tag-image.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: staging
+    secrets: inherit
+
+  sync-staging:
+    needs: tag-image-staging
+    uses: ./.github/workflows/sync.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: staging
+    secrets: inherit
+
+  tag-image-prod:
+    needs: sync-staging
+    uses: ./.github/workflows/tag-image.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: prod
+    secrets: inherit
+
+  sync-prod:
+    needs: tag-image-prod
+    uses: ./.github/workflows/sync.yml
+    with:
+      service: ${{ inputs.service }}
+      environment: prod
+    secrets: inherit
