@@ -1,0 +1,43 @@
+ARG PYTHON_VERSION=3.14
+
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN pip wheel \
+    --no-cache-dir \
+    --wheel-dir /wheels \
+    -r requirements.txt
+
+
+FROM python:${PYTHON_VERSION}-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN groupadd --system app \
+    && useradd --system --gid app --create-home app
+
+COPY requirements.txt .
+COPY --from=builder /wheels /wheels
+
+RUN pip install \
+    --no-cache-dir \
+    --no-index \
+    --find-links=/wheels \
+    -r requirements.txt \
+    && rm -rf /wheels
+
+COPY --chown=app:app . .
+
+USER app
+
+CMD ["python", "main.py"]
