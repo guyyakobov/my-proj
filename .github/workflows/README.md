@@ -1,4 +1,4 @@
 ## CI/CD Architecture
 
-![CI/CD Architecture](diagram.png)
+![CI/CD Architecture](../diagram.png)
 
