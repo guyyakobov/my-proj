@@ -27,9 +27,9 @@ jobs:
       - name: Sync application
         run: |
           set -euo pipefail
-          SELECTOR='service=${{ inputs.service }},env=${{ inputs.environment }}'
+          SELECTOR='service=${{ inputs.service }},environment=${{ inputs.environment }}'
 
-          echo "Syncing applications with the following labels: service=${{ inputs.service }} and env=${{ inputs.environment }}"
+          echo "Syncing applications with the following labels: service=${{ inputs.service }} and environment=${{ inputs.environment }}"
           argocd app sync \
             -l "$SELECTOR" \
             --async \

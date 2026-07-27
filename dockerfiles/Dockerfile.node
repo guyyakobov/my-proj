@@ -1,7 +1,7 @@
 ARG NODE_VERSION=24
 
 
-FROM node:${NODE_VERSION}-slim AS builder
+FROM node:${NODE_VERSION}-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 
-FROM node:${NODE_VERSION}-slim AS runtime
+FROM node:${NODE_VERSION}-alpine AS runtime
 
 ENV NODE_ENV=production
 

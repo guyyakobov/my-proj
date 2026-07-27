@@ -1,0 +1,115 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: helm-apps
+  namespace: argocd
+
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+
+  generators:
+    - matrix:
+        generators:
+
+          # Find Helm charts recursively.
+          # An Application is generated only when Chart.yaml exists.
+          - git:
+              repoURL: https://github.com/guyyakobov/my-proj.git
+              revision: main
+              files:
+                - path: "helm/charts/**/Chart.yaml"
+
+                # Optional:
+                # avoid treating vendored Helm dependencies as apps
+                - path: "helm/charts/**/charts/**/Chart.yaml"
+                  exclude: true
+
+          # Every chart gets one app per environment.
+          - list:
+              elements:
+                - env: dev
+                - env: staging
+                - env: prod
+
+  template:
+    metadata:
+      name: '{{ .path.basenameNormalized }}-{{ .env }}'
+
+      labels:
+        environment: '{{ .env }}'
+        application: '{{ .path.basenameNormalized }}'
+
+    spec:
+      project: default
+
+      source:
+        repoURL: https://github.com/guyyakobov/my-proj.git
+        targetRevision: main
+
+        # .path.path is the directory containing Chart.yaml
+        path: '{{ .path.path }}'
+
+        helm:
+          releaseName: '{{ .path.basenameNormalized }}'
+
+          ignoreMissingValueFiles: true
+
+          valueFiles:
+            # global/common
+            - ../../global-values/values.yaml
+
+            # global/environment
+            - '../../global-values/values-{{ .env }}.yaml'
+
+            # chart/common
+            - values.yaml
+
+            # chart/environment
+            - 'values-{{ .env }}.yaml'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .path.basenameNormalized }}-{{ .env }}'
+
+      # HPA is allowed to modify replicas without Argo CD
+      # reporting/reverting that difference.
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
+
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - RespectIgnoreDifferences=true
+
+  # Default is manual because the template above has no
+  # spec.syncPolicy.automated section.
+  #
+  # Only dev gets automated sync.
+  templatePatch: |
+    {{- if eq .env "dev" }}
+    spec:
+      syncPolicy:
+        automated:
+          enabled: true
+          prune: true
+          selfHeal: false
+        syncOptions:
+          - CreateNamespace=true
+          - RespectIgnoreDifferences=true
+    {{- end }}
+
+  syncPolicy:
+
+    # IMPORTANT:
+    # A chart disappearing from the generator will NOT cause the
+    # corresponding Application to be deleted.
+    applicationsSync: create-update
+
+    # Extra protection for workloads if an Application itself
+    # eventually gets deleted.
+    preserveResourcesOnDeletion: true
