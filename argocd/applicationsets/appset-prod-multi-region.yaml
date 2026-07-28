@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: appset-single-cluster-v1
+  name: appset-prod-multi-region
   namespace: argocd
 spec:
   goTemplate: true
@@ -13,22 +13,24 @@ spec:
           - git:
               repoURL: https://github.com/guyyakobov/my-proj.git
               revision: main
-              directories:
-                - path: helm/charts/*
+              files:
+                - path: helm/charts/*/values-prod.yaml
               values:
                 system: my-proj
-          - list:
-              elements:
-                - env: dev
-                - env: staging
-                - env: prod
+          - clusters:
+              selector:
+                matchLabels:
+                  environment: prod
+                matchExpressions:
+                  - key: region
+                    operator: Exists
   template:
     metadata:
-      name: '{{ .path.basename }}-{{ .env }}'
+      name: '{{ .path.basename }}-prod-{{ index .metadata.labels "region" }}'
       labels:
-        system: '{{ .system }}'
-        environment: '{{ .env }}'
+        environment: prod
         service: '{{ .path.basename }}'
+        region: '{{ index .metadata.labels "region" }}'
     spec:
       project: default
       source:
@@ -36,15 +38,17 @@ spec:
         targetRevision: main
         path: '{{ .path.path }}'
         helm:
-          # ignoreMissingValueFiles: true
+          ignoreMissingValueFiles: true
           valueFiles:
             - ../../global-values/values.yaml
-            - '../../global-values/values-{{ .env }}.yaml'
+            - ../../global-values/values-prod.yaml
+            - '../../global-values/values-prod-{{ index .metadata.labels "region" }}.yaml'
             - values.yaml
-            - 'values-{{ .env }}.yaml'
+            - values-prod.yaml
+            - 'values-prod-{{ index .metadata.labels "region" }}.yaml'
       destination:
-        server: https://kubernetes.default.svc
-        namespace: '{{ .values.system }}-{{ .env }}'
+        server: '{{ .server }}'
+        namespace: '{{ .values.system }}-prod'
       ignoreDifferences:
         - group: apps
           kind: Deployment
@@ -57,17 +61,7 @@ spec:
       syncPolicy:
         syncOptions:
           - RespectIgnoreDifferences=true
-  templatePatch: |
-    {{- if eq .env "dev" }}
-    spec:
-      syncPolicy:
-        automated:
-          enabled: true
-          prune: true
-          selfHeal: false
-        syncOptions:
-          - RespectIgnoreDifferences=true
-    {{- end }}
+          - CreateNamespace=true
   syncPolicy:
     applicationsSync: create-update
     preserveResourcesOnDeletion: true

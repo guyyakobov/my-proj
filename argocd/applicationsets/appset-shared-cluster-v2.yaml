@@ -29,10 +29,10 @@ spec:
         targetRevision: main
         path: '{{ .path.path }}'
         helm:
-          ignoreMissingValueFiles: true
+          # ignoreMissingValueFiles: true
           valueFiles:
             - ../../global-values/values.yaml
-            - '../../global-values/values-{{ trimSuffix ".yaml" (trimPrefix "values-" .path.filename) }}.yaml'
+            - '../../global-values/{{ .path.filename }}'
             - values.yaml
             - '{{ .path.filename }}'
       destination:
@@ -43,6 +43,10 @@ spec:
           kind: Deployment
           jsonPointers:
             - /spec/replicas
+        - group: apps
+          kind: StatefulSet
+          jsonPointers:
+            - /spec/replicas   
       syncPolicy:
         syncOptions:
           - RespectIgnoreDifferences=true
