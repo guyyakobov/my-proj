@@ -41,14 +41,14 @@ spec:
           ignoreMissingValueFiles: true
           valueFiles:
             - ../../global-values/values.yaml
-            - ../../global-values/values-prod.yaml
-            - '../../global-values/values-prod-{{ index .metadata.labels "region" }}.yaml'
+            - '../../global-values/{{ .path.filename }}'
+            - '../../global-values/values-{{ index .metadata.labels "environment" }}-{{ index .metadata.labels "region" }}.yaml'
             - values.yaml
-            - values-prod.yaml
-            - 'values-prod-{{ index .metadata.labels "region" }}.yaml'
+            - '{{ .path.filename }}'
+            - 'values-{{ index .metadata.labels "environment" }}-{{ index .metadata.labels "region" }}.yaml'
       destination:
         server: '{{ .server }}'
-        namespace: '{{ .values.system }}-prod'
+        namespace: '{{ .values.system }}-{{ index .metadata.labels "environment" }}'
       ignoreDifferences:
         - group: apps
           kind: Deployment
