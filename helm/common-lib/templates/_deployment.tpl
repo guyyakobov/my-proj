@@ -1,21 +1,27 @@
 {{- define "common.deployment" -}}
 {{- $common := .Values.common | default (dict) }}
+{{- $hpaEnabled := dig "hpa" "enabled" false .Values }}
+{{- $deploymentAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.deploymentAnnotations)) }}
+{{- $podAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.podAnnotations)) }}
+{{- $configMapRollout := and .Values.configMap .Values.configMapRollout }}
+{{- $env := concat (default (list) $common.env) (default (list) .Values.env) }}
+{{- $volumeMounts := concat (default (list) $common.volumeMounts) (default (list) .Values.volumeMounts) }}
+{{- $volumes := concat (default (list) $common.volumes) (default (list) .Values.volumes) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "common.fullname" . }}
   labels:
     {{- include "common.labels" . | nindent 4 }}
-  {{- $deploymentAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.Annotations)) (default (dict) .Values.deploymentAnnotations)) }}
   {{- with  $deploymentAnnotations }}
   annotations:
     {{- include "common.renderStringMap" . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.hpa.enabled }}
-  replicas: {{ .Values.replicas }}
+  {{- if not $hpaEnabled }}
+  replicas: {{ dig "replicas" 1 .Values }}
   {{- end }}
-  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ dig "revisionHistoryLimit" 3 .Values }}
   selector:
     matchLabels:
       {{- include "common.selectorLabels" . | nindent 6 }}
@@ -23,8 +29,6 @@ spec:
     metadata:
       labels:
         {{- include "common.labels" . | nindent 8 }}
-      {{- $podAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.Annotations)) (default (dict) .Values.podAnnotations)) }}
-      {{- $configMapRollout := and .Values.configMap .Values.configMapRollout }}
       {{- if or $podAnnotations $configMapRollout }}
       annotations:
         {{- if $configMapRollout }}
@@ -68,55 +72,79 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: {{- include "common.image" . }}
+          image: {{ include "common.image" (dict "root" . "image" .Values.image) }}
           imagePullPolicy: IfNotPresent
           {{- with .Values.command }}
           command:
-            {{ toyaml . | nindent 12}}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.args: }}
+          {{- with .Values.args }}
           args:
-            {{ toyaml . | nindent 12}}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- $env := concat (default (list) $common.env) (default (list) .Values.env) }}
           {{- with $env }}
           env:
             {{- range . }}
             - name: {{ .name | quote }}
               {{- if hasKey . "value" }}
-              value {{ .value | quote }}
+              value: {{ .value | quote }}
               {{- else if hasKey . "valueFrom" }}
-              valuesFrom:
+              valueFrom:
                 {{- toYaml .valueFrom | nindent 16 }}
               {{- end }}
             {{- end }}
-          {{ - if or .Values.configMap .values.envFrom }}
+          {{- end }}
+          {{- if or .Values.configMap .Values.envFrom }}
           envFrom:
             {{- if .Values.configMap }}
             - configMapRef:
-                name: {{- include "common.fullname" . }}
+                name: {{ include "common.fullname" . }}
             {{- end }}
-            {{-with .Values.envFrom }}
-              {{- toyaml . | nindent 14 }}
+            {{- with .Values.envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           ports:
-          {{ if not .Values.containerPorts }}
+            {{ if not .Values.containerPorts }}
             - containerPort: {{ .Values.server.port }}
-          {{- else }}
-            {{- toyaml .Values.containerPorts | nindent 12 }}
-          {{- end }}
+            {{- else }}
+            {{- toYaml .Values.containerPorts | nindent 12 }}
+            {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
-            {{- toyaml . | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.readinessProbe }}
           readinessProbe:
-            {{- toyaml . | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.startupProbe }}
           startupProbe:
-            {{- toyaml . | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           resources:
-            {{- toyaml .Values.resources | nindent 12 }}
-          
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- with $volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{-  end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
