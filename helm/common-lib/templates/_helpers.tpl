@@ -56,3 +56,19 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ $k }}: {{ $v | quote }}
 {{- end }}
 {{- end }}
+
+{{- define "common.mergeOverwriteListByKey" -}}
+{{- $result := dict }}
+{{- $key := required "common.mergeOverwriteListByKey requires key" .key }}
+{{- range $list := .lists }}
+  {{- range $list }}
+    {{- $_ := set $result (toString (index . $key)) . }}
+  {{- end }}
+{{- end }}
+{{- $sorted := list }}
+{{- range $name := keys $result | sortAlpha }}
+  {{- $sorted = append $sorted (get $result $name) }}
+{{- end }}
+{{- $sorted | toYaml }}
+{{- end }}
+

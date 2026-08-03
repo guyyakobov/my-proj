@@ -4,9 +4,9 @@
 {{- $deploymentAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.deploymentAnnotations)) }}
 {{- $podAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.podAnnotations)) }}
 {{- $configMapRollout := and .Values.configMap .Values.configMapRollout }}
-{{- $env := concat (default (list) $common.env) (default (list) .Values.env) }}
-{{- $volumeMounts := concat (default (list) $common.volumeMounts) (default (list) .Values.volumeMounts) }}
-{{- $volumes := concat (default (list) $common.volumes) (default (list) .Values.volumes) }}
+{{- $env := include "common.mergeOverwriteListByKey" (dict "lists" (list (default (list) $common.env) (default (list) .Values.env)) "key" "name") | fromYamlArray }}
+{{- $volumeMounts := include "common.mergeOverwriteListByKey" (dict "lists" (list (default (list) $common.volumeMounts) (default (list) .Values.volumeMounts)) "key" "name") | fromYamlArray }}
+{{- $volumes := include "common.mergeOverwriteListByKey" (dict "lists" (list (default (list) $common.volumes) (default (list) .Values.volumes)) "key" "name") | fromYamlArray }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,6 +25,10 @@ spec:
   selector:
     matchLabels:
       {{- include "common.selectorLabels" . | nindent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:
@@ -52,9 +56,6 @@ spec:
       {{- end }}
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
-      {{- end }}
-      {{- with .Values.schedulerName }}
-      schedulerName: {{ . | quote }}
       {{- end }}
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
@@ -146,5 +147,8 @@ spec:
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.schedulerName }}
+      schedulerName: {{ . | quote }}
       {{- end }}
 {{- end }}
