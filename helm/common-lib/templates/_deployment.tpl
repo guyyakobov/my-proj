@@ -43,7 +43,7 @@ spec:
         {{- end }}
       {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets  }}
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -68,7 +68,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ .Values.containerName | default ( include "common.name" . ) }}
+        - name: {{ .Values.containerName | default (include "common.name" .) }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -106,7 +106,7 @@ spec:
             {{- end }}
           {{- end }}
           ports:
-            {{ if not .Values.containerPorts }}
+            {{- if not .Values.containerPorts }}
             - containerPort: {{ .Values.server.port }}
             {{- else }}
             {{- toYaml .Values.containerPorts | nindent 12 }}
@@ -135,7 +135,7 @@ spec:
       {{- with $volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
-      {{-  end }}
+      {{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

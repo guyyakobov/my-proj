@@ -1,8 +1,7 @@
-```gotemplate
 {{- define "common.statefulset" -}}
 {{- $common := .Values.common | default (dict) }}
 {{- $hpaEnabled := dig "hpa" "enabled" false .Values }}
-{{- $deploymentAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.deploymentAnnotations)) }}
+{{- $statefulSetAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.statefulSetAnnotations)) }}
 {{- $podAnnotations := (mergeOverwrite (deepCopy (default (dict) $common.annotations)) (default (dict) .Values.podAnnotations)) }}
 {{- $configMapRollout := and .Values.configMap .Values.configMapRollout }}
 {{- $env := include "common.mergeOverwriteListByKey" (dict "lists" (list (default (list) $common.env) (default (list) .Values.env)) "key" "name") | fromYamlArray }}
@@ -14,12 +13,12 @@ metadata:
   name: {{ include "common.fullname" . }}
   labels:
     {{- include "common.labels" . | nindent 4 }}
-  {{- with $deploymentAnnotations }}
+  {{- with $statefulSetAnnotations }}
   annotations:
     {{- include "common.renderStringMap" . | nindent 4 }}
   {{- end }}
 spec:
-  serviceName: {{ .Values.service.name | default (include "common.fullname" .) | quote }}
+  serviceName: {{ include "common.headlessServiceName" . }}
   {{- if not $hpaEnabled }}
   replicas: {{ dig "replicas" 1 .Values }}
   {{- end }}
@@ -31,14 +30,16 @@ spec:
   updateStrategy:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  {{- with .Values.minReadySeconds }}
-  minReadySeconds: {{ . }}
+  {{- with .Values.persistentVolumeClaimRetentionPolicy }}
+  persistentVolumeClaimRetentionPolicy:
+    {{- toYaml . | nindent 4 }}
   {{- end }}
-
+  {{- if hasKey .Values "minReadySeconds" }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "common.selectorLabels" . | nindent 6 }}
-
   template:
     metadata:
       labels:
@@ -52,64 +53,47 @@ spec:
         {{- include "common.renderStringMap" . | nindent 8 }}
         {{- end }}
       {{- end }}
-
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       {{- if hasKey .Values "terminationGracePeriodSeconds" }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- end }}
-
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}
-
-      {{- with .Values.schedulerName }}
-      schedulerName: {{ . | quote }}
-      {{- end }}
-
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
       {{- end }}
-
       {{- if hasKey .Values "automountServiceAccountToken" }}
       automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
       {{- end }}
-
       {{- with .Values.initContainers }}
       initContainers:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       containers:
         - name: {{ .Values.containerName | default (include "common.name" .) }}
-
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           image: {{ include "common.image" (dict "root" . "image" .Values.image) }}
           imagePullPolicy: IfNotPresent
-
           {{- with .Values.command }}
           command:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           {{- with .Values.args }}
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           {{- with $env }}
           env:
             {{- range . }}
@@ -122,7 +106,6 @@ spec:
               {{- end }}
             {{- end }}
           {{- end }}
-
           {{- if or .Values.configMap .Values.envFrom }}
           envFrom:
             {{- if .Values.configMap }}
@@ -133,69 +116,54 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-
           ports:
             {{- if not .Values.containerPorts }}
             - containerPort: {{ .Values.server.port }}
             {{- else }}
             {{- toYaml .Values.containerPorts | nindent 12 }}
             {{- end }}
-
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           {{- with .Values.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           {{- with .Values.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-
           {{- with $volumeMounts }}
           volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-
       {{- with $volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
-  {{- with .Values.persistentVolumeClaimRetentionPolicy }}
-  persistentVolumeClaimRetentionPolicy:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-
+      {{- with .Values.schedulerName }}
+      schedulerName: {{ . | quote }}
+      {{- end }}
   {{- with .Values.volumeClaimTemplates }}
   volumeClaimTemplates:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 {{- end }}
-```

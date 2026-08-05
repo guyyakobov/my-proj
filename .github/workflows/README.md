@@ -1,6 +1,6 @@
 ## CI/CD Architecture
 
-![CI/CD Architecture](../../diagrams/ci-cd.png)
+![CI/CD Architecture](diagram-cicd.png)
 
 This repository uses GitHub Actions to build, test, scan, deploy, and promote services across development, staging, and production environments. The workflows are split into reusable pipelines for Node services, Python services, and Helm chart validation.
 

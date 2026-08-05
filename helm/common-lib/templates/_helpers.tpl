@@ -72,3 +72,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $sorted | toYaml }}
 {{- end }}
 
+{{- define "common.headlessServiceName" -}}
+{{- printf "%s-headless" (include "common.fullname" . | trunc 54 | trimSuffix "-") | trunc 63 | trimSuffix "-" }}
+{{- end }}
