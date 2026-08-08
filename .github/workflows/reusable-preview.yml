@@ -47,7 +47,7 @@ jobs:
           if [[ "${{ inputs.strategy }}" == "isolated-dev" ]]; then
             echo "NAMESPACE=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
           else
-            echo "NAMESPACE=${{ vars.EKS_DEV_NAMESPACE }}" >> "$GITHUB_ENV"
+            echo "NAMESPACE=${{ vars.EKS_NAMESPACE }}" >> "$GITHUB_ENV"
           fi
 
       - name: Configure AWS credentials
@@ -59,7 +59,7 @@ jobs:
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
-            --name "${{ vars.AWS_EKS_CLUSTER_NAME }}" \
+            --name "${{ vars.EKS_CLUSTER_NAME }}" \
             --region "${{ vars.AWS_REGION }}"
 
       - name: Install kubectl
@@ -86,9 +86,9 @@ jobs:
           fi
           helm dependency update
           helm template "${{ inputs.service }}" . \
-            -f ../../global-values/values.yaml \
-            -f ../../global-values/values-dev.yaml \
-            -f ../../global-values/values-preview.yaml \
+            -f ../../common-values/values.yaml \
+            -f ../../common-values/values-dev.yaml \
+            -f ../../common-values/values-preview.yaml \
             -f values.yaml \
             -f values-dev.yaml \
             -f values-preview.yaml \
@@ -106,8 +106,8 @@ jobs:
             kubectl delete namespace "$NAMESPACE" --ignore-not-found
           else
             helm template "${{ inputs.service }}" . \
-              -f ../../global-values/values.yaml \
-              -f ../../global-values/values-dev.yaml \
+              -f ../../common-values/values.yaml \
+              -f ../../common-values/values-dev.yaml \
               -f values.yaml \
               -f values-dev.yaml \
               | kubectl apply -n "$NAMESPACE" -f -

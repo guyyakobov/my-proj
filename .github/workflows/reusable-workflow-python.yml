@@ -113,7 +113,7 @@ jobs:
     secrets: inherit
 
   sync-staging:
-    needs: tag-image-staging
+    needs: promote-staging
     uses: ./.github/workflows/reusable-sync.yml
     with:
       service: ${{ inputs.service }}

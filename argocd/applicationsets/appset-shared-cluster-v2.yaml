@@ -31,8 +31,8 @@ spec:
         helm:
           # ignoreMissingValueFiles: true
           valueFiles:
-            - ../../global-values/values.yaml
-            - '../../global-values/{{ .path.filename }}'
+            - ../../common-values/values.yaml
+            - '../../common-values/{{ .path.filename }}'
             - values.yaml
             - '{{ .path.filename }}'
       destination:

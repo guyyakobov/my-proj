@@ -28,9 +28,9 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- else }}
     - name: {{ default "http" $service.portName | quote }}
-      port: {{ $service.port }}
-      targetPort: {{ $service.targetPort | default $service.port }}
-      {{- if and $service.nodePort (or (eq $service.type "NodePort") (eq $service.type "LoadBalancer")) }}
+     * port: {{ $service.port }}
+     * targetPort: {{ $service.targetPort | default $service.port }}
+     * {{- if and $service.nodePort (or (eq $service.type "NodePort") (eq $service.type "LoadBalancer")) }}
       nodePort: {{ $service.nodePort }}
       {{- end }}
       {{- with $service.protocol }}

@@ -38,8 +38,8 @@ spec:
         helm:
           # ignoreMissingValueFiles: true
           valueFiles:
-            - ../../global-values/values.yaml
-            - '../../global-values/values-{{ .env }}.yaml'
+            - ../../common-values/values.yaml
+            - '../../common-values/values-{{ .env }}.yaml'
             - values.yaml
             - 'values-{{ .env }}.yaml'
       destination:

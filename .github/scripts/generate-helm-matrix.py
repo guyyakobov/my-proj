@@ -33,4 +33,4 @@ matrix_json = json.dumps(matrix)
 
 with open(github_output, "a") as f:
     f.write(f"matrix={matrix_json}\n")
-    
+

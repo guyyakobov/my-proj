@@ -40,9 +40,9 @@ spec:
         helm:
           ignoreMissingValueFiles: true
           valueFiles:
-            - ../../global-values/values.yaml
-            - '../../global-values/{{ .path.filename }}'
-            - '../../global-values/values-{{ index .metadata.labels "environment" }}-{{ index .metadata.labels "region" }}.yaml'
+            - ../../common-values/values.yaml
+            - '../../common-values/{{ .path.filename }}'
+            - '../../common-values/values-{{ index .metadata.labels "environment" }}-{{ index .metadata.labels "region" }}.yaml'
             - values.yaml
             - '{{ .path.filename }}'
             - 'values-{{ index .metadata.labels "environment" }}-{{ index .metadata.labels "region" }}.yaml'

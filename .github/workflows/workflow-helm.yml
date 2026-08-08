@@ -81,8 +81,8 @@ jobs:
       - name: Lint helm chart
         run: |
           helm lint . \
-            -f ../../global-values/values.yaml \
-            -f ../../global-values/values-${{ matrix.environment }}.yaml \
+            -f ../../common-values/values.yaml \
+            -f ../../common-values/values-${{ matrix.environment }}.yaml \
             -f values.yaml \
             -f values-${{ matrix.environment }}.yaml \
             --strict
@@ -90,8 +90,8 @@ jobs:
       - name: Validate Kubernetes manifests
         run: |
           helm template ${{ matrix.service }} . \
-            -f ../../global-values/values.yaml \
-            -f ../../global-values/values-${{ matrix.environment }}.yaml \
+            -f ../../common-values/values.yaml \
+            -f ../../common-values/values-${{ matrix.environment }}.yaml \
             -f values.yaml \
             -f values-${{ matrix.environment }}.yaml \
           | kubeconform \
@@ -103,12 +103,11 @@ jobs:
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true
     needs: changes
-    environment: ${{ matrix.environment }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.matrix) }}
-    uses: ./.github/workflows/reuable-sync.yml
+    uses: ./.github/workflows/reusable-sync.yml
     with:
       service: ${{ matrix.service }}
       environment: ${{ matrix.environment }}

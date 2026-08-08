@@ -19,6 +19,9 @@ jobs:
       run:
         working-directory: helm/charts/${{ inputs.service }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Set short SHA
         run: |
           SHA="${{ github.event.pull_request.head.sha }}"
@@ -47,9 +50,6 @@ jobs:
               --image-tag "${{inputs.environment}}-$SHORT_SHA" \
               --image-manifest "$MANIFEST"
           fi  
-
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Configure Git
         run: |

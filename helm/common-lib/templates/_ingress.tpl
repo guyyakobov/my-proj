@@ -45,11 +45,10 @@ spec:
               service:
                 name: {{ .serviceName | default (include "common.fullname" $) }}
                 port:
-                  {{- if kindIs "string" $service.port }}
-                  name: {{ $service.port | quote }}
-                  {{- else }}
-                  number: {{ $servicePort }}
-                  {{- end }}
+
+
+
+
               {{- end }}
           {{- end }}
     {{- end }}
